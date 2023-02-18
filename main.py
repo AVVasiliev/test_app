@@ -1,3 +1,4 @@
+import sys
 from enum import Enum
 
 import flet
@@ -5,9 +6,6 @@ import json
 from typing import List, Optional
 from pathlib import Path
 
-# TODO save global result
-# TODO button complete test
-# TODO total score table with saving availability
 # TODO attachments
 
 # TODO correct enum class in other file
@@ -193,8 +191,12 @@ class TaskTab:
 
 
 def main(page: flet.Page):
+    if sys.executable.endswith('python.exe'):
+        data_folder: Path = Path(__file__).parent / 'test_data'
+    else:
+        data_folder: Path = Path(sys.executable).parent / 'test_data'
 
-    tasks: list = json.loads(Path("task_data.json").read_text(encoding='utf-8'))
+    tasks: list = json.loads(Path(data_folder / "task_data.json").read_text(encoding='utf-8'))
     tabs = flet.Tabs(
         selected_index=0,
         tabs=[],
@@ -227,7 +229,12 @@ def main(page: flet.Page):
 
 
 if __name__ == '__main__':
+    if sys.executable.endswith('python.exe'):
+        data_folder: Path = Path(__file__).parent / 'test_data'
+    else:
+        data_folder: Path = Path(sys.executable).parent / 'test_data'
+
     flet.app(
         target=main,
-        assets_dir='data'
+        assets_dir=str(data_folder / 'data')
     )
