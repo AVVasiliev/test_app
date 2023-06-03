@@ -1,14 +1,16 @@
 import json
 import os
+import shutil
 import sys
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from typing import List, Optional
 
 import flet
 
 from start_form import build_input_form
-from utils import close_alert_bar
+from utils import close_alert_bar, save_result_to_file
 
 USER_CONFIG: Path = Path(os.environ.get('USERPROFILE')) / "vav_test_system" / "configs.json"
 BASE_PATH: Path = Path(__file__).parent
@@ -29,7 +31,8 @@ else:
 
 
 def get_task_file(event: flet.FilePickerResultEvent):
-    print(event.path)
+    if event.path:
+        shutil.copy(DATA_PATH / event.control.file_name, event.path)
 
 
 class TaskTab:
@@ -39,14 +42,12 @@ class TaskTab:
             body_path: str,
             attachments: List[str],
             solution_form: dict,
-            dialog_files: flet.FilePicker
     ):
         self.solutions = solution_form.get('solutions')
         self.sol_type = solution_form.get('type')
         self.task_id = task_id
         self.task_body = body_path
         self.attachments = attachments
-        self.dialog_files = dialog_files
 
         self.text_solution = flet.Text()
         self.values = []
@@ -181,7 +182,7 @@ class TaskTab:
             row, column = len(self.solutions), len(self.solutions[-1])
             self.solution_item = self._build_custom_table(row, column)
 
-    def create_page(self):
+    def create_page(self, page: flet.Page):
         # require in flet.app define assets_dir, path to pict ONLY relative
         self.image = flet.Image(
                 src=self.task_body,
@@ -208,13 +209,18 @@ class TaskTab:
 
         files_form = flet.Column()
         for attachment in self.attachments:
+            save_dialog = flet.FilePicker(
+                on_result=lambda event: get_task_file(event)
+            )
+            page.overlay.append(save_dialog)
             files_form.controls.append(
                 flet.ElevatedButton(
                     attachment,
+                    data=attachment,
                     icon=flet.icons.DATASET,
-                    on_click=lambda _: self.dialog_files.save_file(
+                    on_click=lambda event: save_dialog.save_file(
                         initial_directory=str(DATA_PATH.parent),
-                        file_name=attachment
+                        file_name=event.control.data
                     )
                 )
             )
@@ -246,11 +252,17 @@ class TaskTab:
 
 def main(page: flet.Page):
     task_data: dict = json.loads((DATA_PATH / "task_data.json").read_text(encoding='utf-8'))
+    save_result_dialog = flet.FilePicker(
+        on_result=lambda event: save_result_to_file(event)
+    )
+    page.overlay.append(save_result_dialog)
 
-    save_dialog = flet.FilePicker(on_result=get_task_file)
     page.title = 'Система тестирования'
-    page.overlay.extend([save_dialog])
-    page.data = {'total_time': task_data.get('total_time'), 'answers_available': True}
+    page.data = {
+        'total_time': task_data.get('total_time'),
+        'answers_available': True,
+        'save_result_dialog': save_result_dialog
+    }
 
     tasks: list = task_data.get('tasks')
     tabs = flet.Tabs(
@@ -267,9 +279,8 @@ def main(page: flet.Page):
             task_id=task.get('task_id'),
             attachments=task.get('attachments'),
             solution_form=task.get('solution_form'),
-            dialog_files=save_dialog
         )
-        tabs.tabs.append(task_tab.create_page())
+        tabs.tabs.append(task_tab.create_page(page))
         tabs_objects.append(task_tab)
 
     navigation_bar = flet.NavigationBar(

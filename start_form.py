@@ -58,7 +58,6 @@ def add_tabs_to_page(tabs: flet.Tabs, navigation_bar: flet.NavigationBar, event:
     event.page.add(tabs)
     event.page.navigation_bar = navigation_bar
     event.page.update()
-
     threading.Thread(target=thread_timer, args=(event.page,), daemon=True).start()
 
 

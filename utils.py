@@ -19,24 +19,26 @@ def get_all_answers(page: flet.Page) -> list:
     return answers
 
 
-def save_answers(page: flet.Page):
+def save_answers(page: flet.Page, path: str, encrypted: bool = False):
     if not page.data.get('answers_available'):
         return
 
     answers = get_all_answers(page)
-    file_name = page.client_storage.get('user_key') + ".json"
     data = {i: value for i, value in enumerate(answers)}
 
-    # not encrypted
-    with open(MAIN_PATH / file_name, 'w') as file:
-        dumped_json: str = json.dumps(data, indent=4, ensure_ascii=False)
-        file.write(dumped_json)
-        return
+    if not encrypted:
+        with open(path, 'w') as file:
+            dumped_json: str = json.dumps(data, indent=4, ensure_ascii=False)
+            file.write(dumped_json)
+    else:
+        with open(MAIN_PATH / 'result.data', 'wb') as file:
+            dumped_json: str = json.dumps(data, indent=4, ensure_ascii=False)
+            file.write(encrypt_data(dumped_json.encode('utf-8')))
 
-    # encrypted
-    with open(MAIN_PATH / 'result.data', 'wb') as file:
-        dumped_json: str = json.dumps(data, indent=4, ensure_ascii=False)
-        file.write(encrypt_data(dumped_json.encode('utf-8')))
+
+def save_result_to_file(event: flet.FilePickerResultEvent):
+    if event.path:
+        save_answers(event.page, event.path)
 
 
 def create_result_table(page: flet.Page):
@@ -78,11 +80,16 @@ def close_dlg_false(e):
     e.page.update()
 
 
-def close_dlg_true(e):
-    create_result_table(e.page)
-    save_answers(e.page)
-    e.page.dialog.open = False
-    e.page.update()
+def close_dlg_true(event):
+    create_result_table(event.page)
+    dialog = event.page.data.get('save_result_dialog')
+    dialog.save_file(
+        initial_directory=str(MAIN_PATH),
+        file_name=event.page.client_storage.get('user_key') + ".json"
+    )
+    #save_answers(e.page)
+    event.page.dialog.open = False
+    event.page.update()
 
 
 def close_alert_bar(event):
