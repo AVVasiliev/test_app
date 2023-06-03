@@ -183,25 +183,38 @@ class TaskTab:
             self.solution_item = self._build_custom_table(row, column)
 
     def create_page(self, page: flet.Page):
-        # require in flet.app define assets_dir, path to pict ONLY relative
-        self.image = flet.Image(
-                src=self.task_body,
-                scale=1,
-                offset=flet.transform.Offset(0, 0),
-                tooltip='Двойной клик ЛКМ для восстановления исходного размера'
+        if self.task_body.endswith('.md'):
+            markdown = flet.Markdown(
+                (DATA_PATH / self.task_body).read_text('utf-8'),
+                selectable=True,
+                extension_set=flet.MarkdownExtensionSet.GITHUB_WEB,
+                on_tap_link=lambda e: page.launch_url(e.data),
             )
-        image_container = flet.Container(
-            content=flet.GestureDetector(
-                content=self.image, on_scroll=self.on_scroll_image, expand=1,
-                on_vertical_drag_update=self.drag_image,
-                on_horizontal_drag_update=self.drag_image,
-                drag_interval=50,
-                on_double_tap=self._restore_image
-            ),
-            alignment=flet.alignment.top_left,
-            expand=2,
-            clip_behavior=flet.ClipBehavior.HARD_EDGE
-        )
+            container = flet.Container(
+                content=markdown,
+                expand=1,
+                alignment=flet.alignment.top_left,
+            )
+
+        else:
+            self.image = flet.Image(
+                    src=self.task_body,
+                    scale=1,
+                    offset=flet.transform.Offset(0, 0),
+                    tooltip='Двойной клик ЛКМ для восстановления исходного размера'
+                )
+            container = flet.Container(
+                content=flet.GestureDetector(
+                    content=self.image, on_scroll=self.on_scroll_image, expand=1,
+                    on_vertical_drag_update=self.drag_image,
+                    on_horizontal_drag_update=self.drag_image,
+                    drag_interval=50,
+                    on_double_tap=self._restore_image
+                ),
+                alignment=flet.alignment.top_left,
+                expand=2,
+                clip_behavior=flet.ClipBehavior.HARD_EDGE
+            )
 
         solution_form = flet.Row()
         self._build_solution_form()
@@ -227,7 +240,7 @@ class TaskTab:
 
         tab_content = flet.Container(
             content=flet.Row(controls=[
-                image_container,
+                container,
                 flet.VerticalDivider(width=2),
                 flet.Column(controls=[
                     solution_form,
