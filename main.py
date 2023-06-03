@@ -1,16 +1,18 @@
+import json
+import os
 import sys
 from enum import Enum
+from pathlib import Path
+from typing import List, Optional
 
 import flet
-import json
-from typing import List, Optional
-from pathlib import Path
 
-# TODO attachments
+from start_form import build_input_form
+from utils import close_alert_bar
 
-# TODO correct enum class in other file
-# TODO pyinstaller with flet
-# TODO picture from base64 that will be builded
+USER_CONFIG: Path = Path(os.environ.get('USERPROFILE')) / "vav_test_system" / "configs.json"
+BASE_PATH: Path = Path(__file__).parent
+TIME_START, TIME_END = None, None
 
 
 class InputType(Enum):
@@ -20,23 +22,50 @@ class InputType(Enum):
     TABLE = "table"
 
 
+if sys.executable.endswith('python.exe'):
+    DATA_PATH = Path(__file__).parent / 'data'
+else:
+    DATA_PATH = Path(sys.executable).parent / 'data'
+
+
+def get_task_file(event: flet.FilePickerResultEvent):
+    print(event.path)
+
+
 class TaskTab:
-    def __init__(self, task_id: str, body_path: str, attachments: List[str], solution_form: dict):
+    def __init__(
+            self,
+            task_id: str,
+            body_path: str,
+            attachments: List[str],
+            solution_form: dict,
+            dialog_files: flet.FilePicker
+    ):
         self.solutions = solution_form.get('solutions')
         self.sol_type = solution_form.get('type')
         self.task_id = task_id
         self.task_body = body_path
         self.attachments = attachments
+        self.dialog_files = dialog_files
 
         self.text_solution = flet.Text()
         self.values = []
         self.tab = None
         self.image = None
         self.solution_item = None
+        self.solved = False
         self.button = flet.ElevatedButton(text='Подтвердить', on_click=self.enter_answer)
 
-    def enter_answer(self, event):
-        result = ''
+    def __str__(self) -> str:
+        return f'Task {self.task_id}, type - {self.sol_type}'
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def get_result(self):
+        result = None
+        if self.button.disabled:
+            return result
 
         if self.sol_type in [InputType.SELECT_ONE.value, InputType.TEXT.value]:
             result = self.solution_item.value
@@ -47,7 +76,15 @@ class TaskTab:
                 for j in range(len(items[-1]))
             ]
         elif self.sol_type == InputType.SELECT_MULTIPLE.value:
-            result = [item.label for item in self.solution_item.controls if item.value]
+            result = [
+                item.label for item
+                in self.solution_item.controls if item.value
+            ]
+
+        return result
+
+    def enter_answer(self, event):
+        result = self.get_result()
 
         if not result:
             return
@@ -58,6 +95,7 @@ class TaskTab:
             flet.Icon(name=flet.icons.CHECK, color=flet.colors.GREEN),
             flet.Text(value=self.tab.text)
         ])
+        self.solved = True
         self.tab.update()
 
     def on_scroll_image(self, event: flet.ScrollEvent):
@@ -168,6 +206,19 @@ class TaskTab:
         self._build_solution_form()
         solution_form.controls.append(self.solution_item)
 
+        files_form = flet.Column()
+        for attachment in self.attachments:
+            files_form.controls.append(
+                flet.ElevatedButton(
+                    attachment,
+                    icon=flet.icons.DATASET,
+                    on_click=lambda _: self.dialog_files.save_file(
+                        initial_directory=str(DATA_PATH.parent),
+                        file_name=attachment
+                    )
+                )
+            )
+
         tab_content = flet.Container(
             content=flet.Row(controls=[
                 image_container,
@@ -175,12 +226,15 @@ class TaskTab:
                 flet.Column(controls=[
                     solution_form,
                     self.button,
-                    self.text_solution
+                    self.text_solution,
+                    flet.Divider(color='blue'),
+                    files_form
                 ], expand=1)
             ]),
             border=flet.border.all(2, flet.colors.BLUE), border_radius=10,
             padding=5,
-            margin=5
+            margin=5,
+            data=self
         )
 
         self.tab = flet.Tab(
@@ -191,30 +245,34 @@ class TaskTab:
 
 
 def main(page: flet.Page):
-    if sys.executable.endswith('python.exe'):
-        data_folder: Path = Path(__file__).parent / 'test_data'
-    else:
-        data_folder: Path = Path(sys.executable).parent / 'test_data'
+    task_data: dict = json.loads((DATA_PATH / "task_data.json").read_text(encoding='utf-8'))
 
-    tasks: list = json.loads(Path(data_folder / "task_data.json").read_text(encoding='utf-8'))
+    save_dialog = flet.FilePicker(on_result=get_task_file)
+    page.title = 'Система тестирования'
+    page.overlay.extend([save_dialog])
+    page.data = {'total_time': task_data.get('total_time'), 'answers_available': True}
+
+    tasks: list = task_data.get('tasks')
     tabs = flet.Tabs(
         selected_index=0,
         tabs=[],
         expand=1,
-        animation_duration=300
+        animation_duration=300,
+        data='main_tabs'
     )
     tabs_objects = []
     for task in tasks:
         task_tab = TaskTab(
             body_path=task.get('body'),
             task_id=task.get('task_id'),
-            attachments=[],
-            solution_form=task.get('solution_form')
+            attachments=task.get('attachments'),
+            solution_form=task.get('solution_form'),
+            dialog_files=save_dialog
         )
         tabs.tabs.append(task_tab.create_page())
         tabs_objects.append(task_tab)
 
-    page.navigation_bar = flet.NavigationBar(
+    navigation_bar = flet.NavigationBar(
         destinations=[
             flet.NavigationDestination(
                 icon=flet.icons.CLOSE,
@@ -222,19 +280,13 @@ def main(page: flet.Page):
                 label="Завершить тест",
             ),
         ],
-        on_change=lambda e: print(e)
+        on_change=close_alert_bar
     )
-
-    page.add(tabs)
+    build_input_form(page, tabs, navigation_bar)
 
 
 if __name__ == '__main__':
-    if sys.executable.endswith('python.exe'):
-        data_folder: Path = Path(__file__).parent / 'test_data'
-    else:
-        data_folder: Path = Path(sys.executable).parent / 'test_data'
-
     flet.app(
         target=main,
-        assets_dir=str(data_folder / 'data')
+        assets_dir=DATA_PATH
     )
