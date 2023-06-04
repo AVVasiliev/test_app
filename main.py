@@ -230,12 +230,12 @@ class TaskTab:
             page.overlay.append(save_dialog)
             files_form.controls.append(
                 flet.ElevatedButton(
-                    attachment,
-                    data=attachment,
+                    Path(attachment).name,
+                    data=DATA_PATH / Path(attachment),
                     icon=flet.icons.DATASET,
                     on_click=lambda event: save_dialog.save_file(
                         initial_directory=str(DATA_PATH.parent),
-                        file_name=event.control.data
+                        file_name=Path(event.control.data).name
                     )
                 )
             )
