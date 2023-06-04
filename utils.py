@@ -87,7 +87,6 @@ def close_dlg_true(event):
         initial_directory=str(MAIN_PATH),
         file_name=event.page.client_storage.get('user_key') + ".json"
     )
-    #save_answers(e.page)
     event.page.dialog.open = False
     event.page.update()
 
@@ -96,8 +95,7 @@ def close_alert_bar(event):
     dlg = flet.AlertDialog(
         modal=True,
         title=flet.Text('Завершить тест?'),
-        content=flet.Text('После заверешения теста ответ будет сохранен в файл result.json '
-                          '(рядом с тестовой программой)'),
+        content=flet.Text('После заверешения теста ответ будет сохранен в файл result.json '),
         actions=[
             flet.TextButton('Да', on_click=close_dlg_true),
             flet.TextButton('Нет', on_click=close_dlg_false)

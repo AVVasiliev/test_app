@@ -4,13 +4,17 @@ import flet
 import datetime
 import threading
 import time
+from pathlib import Path
+
+
+TITLE_PATH = Path(__file__).parent / 'static' / 'title.png'
 
 
 def build_timer_repr(total_seconds: int) -> str:
     hours: int = total_seconds // 3600
     minutes: int = total_seconds // 60 % 60
     seconds: int = total_seconds % 60
-    return f"{hours}:" if hours else "" + f"{minutes}".zfill(2) + ":" + f"{seconds}".zfill(2)
+    return (f"{hours}:" if hours else "") + (f"{minutes}".zfill(2) + ":" + f"{seconds}".zfill(2))
 
 
 def disable_answers(page: flet.Page):
@@ -65,19 +69,30 @@ def build_input_form(page: flet.Page, tabs: flet.Tabs, navigation_bar: flet.Navi
     name = flet.TextField(label='Имя')
     family = flet.TextField(label='Фамилия')
     group = flet.TextField(label='Группа')
-    form = flet.Container(content=flet.Column(
+
+    form = flet.Container(content=flet.ResponsiveRow(
         controls=[
-            flet.Text('Форма подготовки'),
-            family,
-            name,
-            group,
-            flet.TextButton(
-                text='Запустить тест',
-                on_click=partial(add_tabs_to_page, tabs, navigation_bar),
-                data=(name, family, group)
+            flet.Column(
+                controls=[
+                    flet.Text('Форма подготовки'), family, name, group,
+                    flet.TextButton(
+                        text='Запустить тест',
+                        on_click=partial(add_tabs_to_page, tabs, navigation_bar),
+                        data=(name, family, group)
+                    ),
+                ], col=4
+            ),
+            flet.Container(
+                content=flet.Image(
+                    src=str(TITLE_PATH),
+                    scale=0.8,
+                ),
+                alignment=flet.alignment.top_left,
+                border=flet.border.all(2, flet.colors.BLUE), border_radius=10,
+                clip_behavior=flet.ClipBehavior.HARD_EDGE,
+                col=8,
             )
-        ]
-    ), data='__INPUT_FORM__')
+        ]), data='__INPUT_FORM__')
     page.add(form)
     page.update()
 
