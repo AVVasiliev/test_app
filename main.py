@@ -3,7 +3,6 @@ import os
 import shutil
 import sys
 from enum import Enum
-from functools import partial
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,6 +10,9 @@ import flet
 
 from start_form import build_input_form
 from utils import close_alert_bar, save_result_to_file
+
+
+__VERSION__ = '0.2.1'
 
 USER_CONFIG: Path = Path(os.environ.get('USERPROFILE')) / "vav_test_system" / "configs.json"
 BASE_PATH: Path = Path(__file__).parent
