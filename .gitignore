@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 test_data
+data
+keys
+github_desktop.jpg
+main.spec
+test_system.spec
+version_info.txt
 
 # C extensions
 *.so

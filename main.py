@@ -1,16 +1,22 @@
+import json
+import os
+import shutil
 import sys
 from enum import Enum
+from pathlib import Path
+from typing import List, Optional
 
 import flet
-import json
-from typing import List, Optional
-from pathlib import Path
 
-# TODO attachments
+from start_form import build_input_form
+from utils import close_alert_bar, save_result_to_file
 
-# TODO correct enum class in other file
-# TODO pyinstaller with flet
-# TODO picture from base64 that will be builded
+
+__VERSION__ = '0.2.3'
+
+USER_CONFIG: Path = Path(os.environ.get('USERPROFILE')) / "vav_test_system" / "configs.json"
+BASE_PATH: Path = Path(__file__).parent
+TIME_START, TIME_END = None, None
 
 
 class InputType(Enum):
@@ -20,8 +26,25 @@ class InputType(Enum):
     TABLE = "table"
 
 
+if sys.executable.endswith('python.exe'):
+    DATA_PATH = Path(__file__).parent / 'data'
+else:
+    DATA_PATH = Path(sys.executable).parent / 'data'
+
+
+def get_task_file(event: flet.FilePickerResultEvent):
+    if event.path:
+        shutil.copy(DATA_PATH / event.control.file_name, event.path)
+
+
 class TaskTab:
-    def __init__(self, task_id: str, body_path: str, attachments: List[str], solution_form: dict):
+    def __init__(
+            self,
+            task_id: str,
+            body_path: str,
+            attachments: List[str],
+            solution_form: dict,
+    ):
         self.solutions = solution_form.get('solutions')
         self.sol_type = solution_form.get('type')
         self.task_id = task_id
@@ -33,10 +56,19 @@ class TaskTab:
         self.tab = None
         self.image = None
         self.solution_item = None
+        self.solved = False
         self.button = flet.ElevatedButton(text='Подтвердить', on_click=self.enter_answer)
 
-    def enter_answer(self, event):
-        result = ''
+    def __str__(self) -> str:
+        return f'Task {self.task_id}, type - {self.sol_type}'
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    def get_result(self):
+        result = None
+        if self.button.disabled:
+            return result
 
         if self.sol_type in [InputType.SELECT_ONE.value, InputType.TEXT.value]:
             result = self.solution_item.value
@@ -47,7 +79,15 @@ class TaskTab:
                 for j in range(len(items[-1]))
             ]
         elif self.sol_type == InputType.SELECT_MULTIPLE.value:
-            result = [item.label for item in self.solution_item.controls if item.value]
+            result = [
+                item.label for item
+                in self.solution_item.controls if item.value
+            ]
+
+        return result
+
+    def enter_answer(self, event):
+        result = self.get_result()
 
         if not result:
             return
@@ -58,6 +98,7 @@ class TaskTab:
             flet.Icon(name=flet.icons.CHECK, color=flet.colors.GREEN),
             flet.Text(value=self.tab.text)
         ])
+        self.solved = True
         self.tab.update()
 
     def on_scroll_image(self, event: flet.ScrollEvent):
@@ -143,44 +184,78 @@ class TaskTab:
             row, column = len(self.solutions), len(self.solutions[-1])
             self.solution_item = self._build_custom_table(row, column)
 
-    def create_page(self):
-        # require in flet.app define assets_dir, path to pict ONLY relative
-        self.image = flet.Image(
-                src=self.task_body,
-                scale=1,
-                offset=flet.transform.Offset(0, 0),
-                tooltip='Двойной клик ЛКМ для восстановления исходного размера'
+    def create_page(self, page: flet.Page):
+        if self.task_body.endswith('.md'):
+            markdown = flet.Markdown(
+                (DATA_PATH / self.task_body).read_text('utf-8'),
+                selectable=True,
+                extension_set=flet.MarkdownExtensionSet.GITHUB_WEB,
+                on_tap_link=lambda e: page.launch_url(e.data),
             )
-        image_container = flet.Container(
-            content=flet.GestureDetector(
-                content=self.image, on_scroll=self.on_scroll_image, expand=1,
-                on_vertical_drag_update=self.drag_image,
-                on_horizontal_drag_update=self.drag_image,
-                drag_interval=50,
-                on_double_tap=self._restore_image
-            ),
-            alignment=flet.alignment.top_left,
-            expand=2,
-            clip_behavior=flet.ClipBehavior.HARD_EDGE
-        )
+            container = flet.Container(
+                content=markdown,
+                expand=1,
+                alignment=flet.alignment.top_left,
+            )
+
+        else:
+            self.image = flet.Image(
+                    src=self.task_body,
+                    scale=1,
+                    offset=flet.transform.Offset(0, 0),
+                    tooltip='Двойной клик ЛКМ для восстановления исходного размера'
+                )
+            container = flet.Container(
+                content=flet.GestureDetector(
+                    content=self.image, on_scroll=self.on_scroll_image, expand=1,
+                    on_vertical_drag_update=self.drag_image,
+                    on_horizontal_drag_update=self.drag_image,
+                    drag_interval=50,
+                    on_double_tap=self._restore_image
+                ),
+                alignment=flet.alignment.top_left,
+                expand=2,
+                clip_behavior=flet.ClipBehavior.HARD_EDGE
+            )
 
         solution_form = flet.Row()
         self._build_solution_form()
         solution_form.controls.append(self.solution_item)
 
+        files_form = flet.Column()
+        for attachment in self.attachments:
+            save_dialog = flet.FilePicker(
+                on_result=lambda event: get_task_file(event)
+            )
+            page.overlay.append(save_dialog)
+            files_form.controls.append(
+                flet.ElevatedButton(
+                    Path(attachment).name,
+                    data=DATA_PATH / Path(attachment),
+                    icon=flet.icons.DATASET,
+                    on_click=lambda event: save_dialog.save_file(
+                        initial_directory=str(DATA_PATH.parent),
+                        file_name=Path(event.control.data).name
+                    )
+                )
+            )
+
         tab_content = flet.Container(
             content=flet.Row(controls=[
-                image_container,
+                container,
                 flet.VerticalDivider(width=2),
                 flet.Column(controls=[
                     solution_form,
                     self.button,
-                    self.text_solution
+                    self.text_solution,
+                    flet.Divider(color='blue'),
+                    files_form
                 ], expand=1)
             ]),
             border=flet.border.all(2, flet.colors.BLUE), border_radius=10,
             padding=5,
-            margin=5
+            margin=5,
+            data=self
         )
 
         self.tab = flet.Tab(
@@ -191,30 +266,39 @@ class TaskTab:
 
 
 def main(page: flet.Page):
-    if sys.executable.endswith('python.exe'):
-        data_folder: Path = Path(__file__).parent / 'test_data'
-    else:
-        data_folder: Path = Path(sys.executable).parent / 'test_data'
+    task_data: dict = json.loads((DATA_PATH / "task_data.json").read_text(encoding='utf-8'))
+    save_result_dialog = flet.FilePicker(
+        on_result=lambda event: save_result_to_file(event)
+    )
+    page.overlay.append(save_result_dialog)
 
-    tasks: list = json.loads(Path(data_folder / "task_data.json").read_text(encoding='utf-8'))
+    page.title = 'Система тестирования'
+    page.data = {
+        'total_time': task_data.get('total_time'),
+        'answers_available': True,
+        'save_result_dialog': save_result_dialog
+    }
+
+    tasks: list = task_data.get('tasks')
     tabs = flet.Tabs(
         selected_index=0,
         tabs=[],
         expand=1,
-        animation_duration=300
+        animation_duration=300,
+        data='main_tabs'
     )
     tabs_objects = []
     for task in tasks:
         task_tab = TaskTab(
             body_path=task.get('body'),
             task_id=task.get('task_id'),
-            attachments=[],
-            solution_form=task.get('solution_form')
+            attachments=task.get('attachments'),
+            solution_form=task.get('solution_form'),
         )
-        tabs.tabs.append(task_tab.create_page())
+        tabs.tabs.append(task_tab.create_page(page))
         tabs_objects.append(task_tab)
 
-    page.navigation_bar = flet.NavigationBar(
+    navigation_bar = flet.NavigationBar(
         destinations=[
             flet.NavigationDestination(
                 icon=flet.icons.CLOSE,
@@ -222,19 +306,13 @@ def main(page: flet.Page):
                 label="Завершить тест",
             ),
         ],
-        on_change=lambda e: print(e)
+        on_change=close_alert_bar
     )
-
-    page.add(tabs)
+    build_input_form(page, tabs, navigation_bar)
 
 
 if __name__ == '__main__':
-    if sys.executable.endswith('python.exe'):
-        data_folder: Path = Path(__file__).parent / 'test_data'
-    else:
-        data_folder: Path = Path(sys.executable).parent / 'test_data'
-
     flet.app(
         target=main,
-        assets_dir=str(data_folder / 'data')
+        assets_dir=DATA_PATH
     )
