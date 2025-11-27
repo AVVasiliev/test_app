@@ -1,8 +1,9 @@
-import flet
 import sys
-import json
 from pathlib import Path
-from encryption import encrypt_data
+
+import flet
+
+from xlsx_generator import ReportGenerator
 
 if sys.executable.endswith('python.exe'):
     MAIN_PATH = Path(__file__).parent
@@ -19,21 +20,17 @@ def get_all_answers(page: flet.Page) -> list:
     return answers
 
 
-def save_answers(page: flet.Page, path: str, encrypted: bool = False):
+def save_answers(page: flet.Page, path: str):
     if not page.data.get('answers_available'):
         return
 
     answers = get_all_answers(page)
-    data = {i: value for i, value in enumerate(answers)}
+    data = {i + 1: value for i, value in enumerate(answers)}
 
-    if not encrypted:
-        with open(path, 'w') as file:
-            dumped_json: str = json.dumps(data, indent=4, ensure_ascii=False)
-            file.write(dumped_json)
-    else:
-        with open(MAIN_PATH / 'result.data', 'wb') as file:
-            dumped_json: str = json.dumps(data, indent=4, ensure_ascii=False)
-            file.write(encrypt_data(dumped_json.encode('utf-8')))
+    report_path = Path(path).parent / f'Ответы_{page.client_storage.get("user_key")}.xlsx'
+    with ReportGenerator(data, page.client_storage.get("user_key"), str(report_path)) as generator:
+        generator.generate()
+        return
 
 
 def save_result_to_file(event: flet.FilePickerResultEvent):
@@ -85,7 +82,7 @@ def close_dlg_true(event):
     dialog = event.page.data.get('save_result_dialog')
     dialog.save_file(
         initial_directory=str(MAIN_PATH),
-        file_name=event.page.client_storage.get('user_key') + ".json"
+        file_name="Ответы_" + event.page.client_storage.get('user_key') + ".xlsx"
     )
     event.page.dialog.open = False
     event.page.update()
@@ -95,7 +92,7 @@ def close_alert_bar(event):
     dlg = flet.AlertDialog(
         modal=True,
         title=flet.Text('Завершить тест?'),
-        content=flet.Text('После заверешения теста ответ будет сохранен в файл result.json '),
+        content=flet.Text('После заверешения теста ответ будет сохранен в файл Ответы_ФИО.xlsx '),
         actions=[
             flet.TextButton('Да', on_click=close_dlg_true),
             flet.TextButton('Нет', on_click=close_dlg_false)

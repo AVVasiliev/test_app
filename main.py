@@ -12,7 +12,7 @@ from start_form import build_input_form
 from utils import close_alert_bar, save_result_to_file
 
 
-__VERSION__ = '0.2.3'
+__VERSION__ = '0.3.0'
 
 USER_CONFIG: Path = Path(os.environ.get('USERPROFILE')) / "vav_test_system" / "configs.json"
 BASE_PATH: Path = Path(__file__).parent
